@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>FF14 ボタン表示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Meiryo', 'メイリオ', sans-serif;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .button-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        .button-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 20px 10px;
+            font-size: 22px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: black;
+            min-width: 220px;
+            white-space: nowrap;
+            text-align: center;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .btn-blue {
+            background: linear-gradient(180deg, #4A9EFF 0%, #2979FF 100%);
+        }
+
+        .btn-blue:hover {
+            background: linear-gradient(180deg, #5AAFFF 0%, #3989FF 100%);
+        }
+
+        .btn-red {
+            background: linear-gradient(180deg, #FF6B6B 0%, #EE5A52 100%);
+        }
+
+        .btn-red:hover {
+            background: linear-gradient(180deg, #FF7B7B 0%, #FE6A62 100%);
+        }
+
+        .btn-reset {
+            background: linear-gradient(180deg, #EEEEEE 0%, #CCCCCC 100%);
+            grid-column: 1 / -1;
+            font-size: 24px;
+        }
+
+        .btn-reset:hover {
+            background: linear-gradient(180deg, #FFFFFF 0%, #DDDDDD 100%);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .display-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+            background: #000;
+            border-radius: 10px;
+        }
+
+        .display-item {
+            width: 300px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            border-radius: 8px;
+            background: #333;
+            color: #fff;
+            border: 3px solid #555;
+        }
+
+        @media screen and (max-width: 1024px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            button {
+                font-size: 24px;
+                padding: 25px 15px;
+                min-width: 250px;
+            }
+            
+            .display-item {
+                width: 100%;
+                max-width: 500px;
+                height: 120px;
+                font-size: 36px;
+            }
+            
+            .button-section {
+                width: 100%;
+                max-width: 550px;
+            }
+        }
+
+        @media screen and (max-width: 768px) {
+            button {
+                font-size: 20px;
+                padding: 20px 10px;
+                min-width: 200px;
+            }
+            
+            .display-item {
+                height: 100px;
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <div class="button-section">
+                <div class="button-row">
+                    <button class="btn-blue" onclick="setDisplay1('X字から')">X字から</button>
+                    <button class="btn-red" onclick="setDisplay1('十字から')">十字から</button>
+                </div>
+
+                <div class="button-row">
+                    <button class="btn-blue" onclick="setDisplay2('頭割りから')">頭割りから</button>
+                    <button class="btn-red" onclick="setDisplay2('範囲から')">範囲から</button>
+                </div>
+
+                <div class="button-row">
+                    <button class="btn-blue" onclick="setDisplay3('1-2安置')">1-2安置</button>
+                    <button class="btn-red" onclick="setDisplay3('3-4安置')">3-4安置</button>
+                </div>
+
+                <div style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #444;">
+                    <button class="btn-reset" onclick="resetAll()">リセット</button>
+                </div>
+            </div>
+
+            <div class="display-section">
+                <div id="display1" class="display-item">-</div>
+                <div id="display2" class="display-item">-</div>
+                <div id="display3" class="display-item">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let display1 = '-';
+        let display2 = '-';
+        let display3 = '-';
+
+        function setDisplay1(value) {
+            display1 = value;
+            updateDisplay();
+        }
+
+        function setDisplay2(value) {
+            display2 = value;
+            updateDisplay();
+        }
+
+        function setDisplay3(value) {
+            display3 = value;
+            updateDisplay();
+        }
+
+        function resetAll() {
+            display1 = '-';
+            display2 = '-';
+            display3 = '-';
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            document.getElementById('display1').textContent = display1;
+            document.getElementById('display2').textContent = display2;
+            document.getElementById('display3').textContent = display3;
+        }
+
+        // 初期表示
+        updateDisplay();
+    </script>
+</body>
+</html>
