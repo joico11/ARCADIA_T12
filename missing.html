@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>絶ケフカ P2「ミッシング」ギミックシミュレーター</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b24; --line:#2a3340; --txt:#e6edf3; --sub:#9aa7b4;
+    --blue:#3a6ee0; --green:#2faa55; --red:#d83a3a; --yellow:#f4d03f; --cyan:#26c6da;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--txt);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;
+    display:flex; gap:18px; padding:18px; min-height:100vh; align-items:flex-start;
+    justify-content:center; flex-wrap:wrap;
+  }
+  h1{font-size:18px; margin:0 0 4px;}
+  .sub{color:var(--sub); font-size:12px; margin:0 0 12px; line-height:1.6;}
+  #stageWrap{position:relative;}
+  canvas{background:radial-gradient(circle at 50% 50%,#161d28 0%,#0b0f15 75%);
+    border:1px solid var(--line); border-radius:12px; touch-action:none; cursor:grab;}
+  .side{width:320px; max-width:92vw;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px; margin-bottom:14px;}
+  .btnrow{display:flex; gap:10px;}
+  button{
+    flex:1; border:none; border-radius:8px; padding:12px 10px; font-size:15px;
+    font-weight:700; cursor:pointer; color:#fff; transition:.15s;
+  }
+  #nextBtn{background:linear-gradient(180deg,#3f8cff,#2f6ee0);}
+  #nextBtn:hover{filter:brightness(1.1);}
+  #nextBtn:disabled{background:#33404f; cursor:not-allowed; color:#7a8694;}
+  #resetBtn{background:#39424f; flex:0 0 96px;}
+  #resetBtn:hover{background:#46515f;}
+  .meta{display:flex; gap:8px; margin:12px 0 4px;}
+  .chip{flex:1; background:#0e141c; border:1px solid var(--line); border-radius:8px;
+    padding:8px; text-align:center;}
+  .chip b{display:block; font-size:18px;}
+  .chip span{font-size:11px; color:var(--sub);}
+  #status{font-size:13px; line-height:1.7; min-height:64px;}
+  #status .tag{display:inline-block; background:#23303f; color:var(--cyan);
+    border-radius:5px; padding:1px 7px; font-size:11px; margin-right:6px; font-weight:700;}
+  .legend{font-size:12px; line-height:1.9; color:var(--sub);}
+  .legend .k{display:inline-flex; align-items:center; gap:6px; margin-right:14px;}
+  .sw{width:13px; height:13px; border-radius:3px; display:inline-block;}
+  .legend h3{color:var(--txt); font-size:13px; margin:0 0 8px;}
+  .rot{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sub); margin-top:10px;}
+  .rot label{cursor:pointer;}
+  .pool{display:flex; align-items:center; gap:10px; font-size:12px; color:var(--sub); margin-top:10px; flex-wrap:wrap;}
+  .pchip{font-weight:600;}
+  .pchip b{font-size:15px;}
+  details{font-size:12px; color:var(--sub); line-height:1.8;}
+  summary{cursor:pointer; color:var(--txt); font-weight:700; margin-bottom:6px;}
+  code{background:#0e141c; padding:1px 5px; border-radius:4px; color:#ffd966;}
+</style>
+</head>
+<body>
+
+<div id="stageWrap">
+  <canvas id="cv" width="760" height="760"></canvas>
+</div>
+
+<div class="side">
+  <div class="panel">
+    <h1>絶ケフカ P2「ミッシング」</h1>
+    <p class="sub">アイコンをドラッグして配置 → ボタンで進行。塔に入った人の頭上アイコン（十字＝頭割り / 扇＝最寄りへ / 円＝散開）に応じて範囲が発生します。エフェクトを見て処理の可否を判断してください。</p>
+    <div class="btnrow">
+      <button id="nextBtn">▶ 開始</button>
+      <button id="resetBtn">リセット</button>
+    </div>
+    <div class="meta">
+      <div class="chip"><b id="mLoop">1 / 4</b><span>セット(塔組)</span></div>
+      <div class="chip"><b id="mStep">0 / 8</b><span>塔踏み回数</span></div>
+      <div class="chip"><b id="mPhase">待機</b><span>フェーズ</span></div>
+    </div>
+    <div class="rot">
+      <span>塔の回転方向:</span>
+      <label><input type="radio" name="rot" value="1" checked> 時計回り</label>
+      <label><input type="radio" name="rot" value="-1"> 反時計回り</label>
+    </div>
+    <div class="pool">
+      <span>盤面の残り供給(在庫):</span>
+      <span class="pchip" style="color:#f4c43c">頭 <b id="poolCross">0</b></span>
+      <span class="pchip" style="color:#9a5af0">扇 <b id="poolFan">0</b></span>
+      <span class="pchip" style="color:#ec56a0">円 <b id="poolCircle">0</b></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="status"><span class="tag">待機</span>「▶ 開始」でミッシング開始。8人に頭割り(十字)/扇/円が配られます。各ロール側で 1人=十字、残り3人=扇 or 円（左右で逆）。</div>
+  </div>
+
+  <div class="panel">
+    <details>
+      <summary>処理のルール（ギミック解説）</summary>
+      ・開始時に4スタックの「スペルハザード」を所持。塔を踏むと起爆し頭上表示のギミックが発動、スタック−1。<br>
+      ・<b>十字＝頭割り</b>：他の攻撃を避けつつ3人で受ける。<br>
+      ・<b>扇</b>：最も近い1人へ飛ぶ（本人は無傷）。1人に誘導してもらう。<br>
+      ・<b>円</b>：誰にも当てない位置へ散開。<br>
+      ・塔は2人×2か所＝合計8回。1〜4回目を踏む4人／5〜8回目を踏む4人に分担。<br>
+      ・<b>頭の供給は回ごとに固定</b>：<code>奇数回=扇2円2</code> / <code>偶数回=頭2扇1円1</code> が盤面プールに湧き、踏んだ人がランダムに受け取る。<br>
+      ・<b>4回踏むとマーク消滅</b>(✓表示)。供給は総数固定なので、偏った踏み方をすると消化されない頭がプールに残り、後の回に回ってくる（1234処理で最後に頭が余る現象）。<br>
+      ・偶数回（各セットの塔踏み②）に<b>過去/未来の終焉</b>＝半面攻撃。<code>過去=塔側へ誘導</code>／<code>未来=反対側へ誘導</code>してから塔処理。<br>
+      ・予兆後に塔は<code>45°</code>回転（同方向に回り続ける）。
+    </details>
+  </div>
+</div>
+
+<script>
+"use strict";
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height, CX = W/2, CY = H/2;
+const ARENA_R = 330;
+// 画像比率に準拠: 塔≈0.18R / 円AoE≈0.21R / 頭割り≈0.23R / ドット≈0.024R / ターゲットサークル≈0.4R
+const TOWER_DIST = 140, TOWER_SEP = 160, TOWER_R = 60;
+const TARGET_R = 132;                    // ボスのターゲットサークル
+const FX_CIRCLE = 72, FX_STACK = 76, FX_FAN_LEN = 152, FX_FAN_DEG = 45;
+const FX_SMALL = 50;        // ボス近4人の円(塔よりやや小さい)
+const HEAD_FAN_DEG = 95;    // 頭上の扇アイコンの広がり(視認性のため広め)
+
+// ---- プレイヤー定義 ----
+const ROLES = [
+  {id:'MT', side:'L', color:'#3a6ee0'},
+  {id:'ST', side:'L', color:'#3a6ee0'},
+  {id:'H1', side:'L', color:'#2faa55'},
+  {id:'H2', side:'L', color:'#2faa55'},
+  {id:'D1', side:'R', color:'#d83a3a'},
+  {id:'D2', side:'R', color:'#d83a3a'},
+  {id:'D3', side:'R', color:'#d83a3a'},
+  {id:'D4', side:'R', color:'#d83a3a'},
+];
+const PDOT_R = 8;  // プレイヤーのドット半径(小さめ)
+
+let players = [];
+function initPositions(){
+  players = ROLES.map((r,i)=>{
+    const inSide = (r.side==='L');
+    const col = inSide ? -1 : 1;
+    const idxInSide = inSide ? i : i-4;
+    return {
+      ...r,
+      x: CX + col*250,
+      y: CY - 110 + idxInSide*72,
+      hazard: null,   // 'cross' | 'fan' | 'circle'
+      steps: 0,       // 塔を踏んだ回数(4でマーク消滅)
+    };
+  });
+}
+
+// ---- 状態 ----
+const state = {
+  idx: -1,     // ステージ列のインデックス(-1=待機)
+  seq: [],     // ステージ列
+  step: 0,     // 塔踏みの累計回数(0..8)
+  done: false,
+  angle: Math.PI/2,    // 塔の方位(画面下=6時)。y-down系で +x基準, 下向き=+90°
+  rotDir: 1,           // +1 時計 / -1 反時計
+  towers: [],          // {x,y}
+  showTowers: false,
+  effects: [],         // 床に出る範囲
+  omen: null,          // '過去' | '未来' (表示中の予兆)
+  memory: null,        // 予兆時に記憶した位置 [{x,y}]
+  halfDanger: null,    // {angle,omen} 危険な半面
+  pool: {cross:0, fan:0, circle:0},  // 盤面の供給取りこぼし在庫
+  phaseFire: false,    // 塔踏み発動中(エフェクト表示・ライブ更新)
+  phaseStep: false,    // 塔へ配置するステージ(踏み手リング表示)
+  _lastSteppers: [],
+};
+
+// ---- ユーティリティ ----
+function rand(n){ return Math.floor(Math.random()*n); }
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function dir(a){ return {x:Math.cos(a), y:Math.sin(a)}; }
+
+function computeTowers(){
+  const d = dir(state.angle);
+  const t = dir(state.angle + Math.PI/2); // 接線方向
+  const pc = {x: CX + d.x*TOWER_DIST, y: CY + d.y*TOWER_DIST};
+  state.towers = [
+    {x: pc.x + t.x*TOWER_SEP/2, y: pc.y + t.y*TOWER_SEP/2},
+    {x: pc.x - t.x*TOWER_SEP/2, y: pc.y - t.y*TOWER_SEP/2},
+  ];
+}
+
+// あるプレイヤーが塔を踏んでいるか
+function inTower(p){
+  for(const t of state.towers){ if(dist(p,t) <= TOWER_R + PDOT_R) return true; }
+  return false;
+}
+
+// 塔の中にいるプレイヤー（塔ごと最大2人想定だが全員拾う）
+function steppers(){
+  const out = [];
+  for(const t of state.towers){
+    for(const p of players){
+      if(dist(p,t) <= TOWER_R + PDOT_R){
+        if(!out.includes(p)) out.push(p);
+      }
+    }
+  }
+  return out;
+}
+
+function nearestOther(p){
+  let best=null, bd=Infinity;
+  for(const q of players){
+    if(q===p) continue;
+    const dd = dist(p,q);
+    if(dd<bd){ bd=dd; best=q; }
+  }
+  return best;
+}
+
+// ---- ハザード配布 ----
+function assignHazards(){
+  // 各サイド: 1人=cross, 残り3人=同一(fan/circle)。左右で逆。
+  const L = players.filter(p=>p.side==='L');
+  const R = players.filter(p=>p.side==='R');
+  const lSpread = Math.random()<0.5 ? 'fan' : 'circle';
+  const rSpread = lSpread==='fan' ? 'circle' : 'fan';
+  const place = (arr, spread)=>{
+    const crossIdx = rand(arr.length);
+    arr.forEach((p,i)=> p.hazard = (i===crossIdx) ? 'cross' : spread);
+  };
+  place(L, lSpread);
+  place(R, rSpread);
+}
+
+function fireStepEffects(){  // 塔踏み: 中の人のハザードを発動
+  const st = steppers();
+  state.effects = [];
+  for(const p of st){
+    if(p.hazard==='cross'){
+      state.effects.push({type:'stack', x:p.x, y:p.y});
+    }else if(p.hazard==='circle'){
+      state.effects.push({type:'circle', x:p.x, y:p.y});
+    }else if(p.hazard==='fan'){
+      const tgt = nearestOther(p);
+      const a = tgt ? Math.atan2(tgt.y-p.y, tgt.x-p.x) : -Math.PI/2;
+      state.effects.push({type:'fan', x:p.x, y:p.y, a});
+    }
+  }
+  return st;
+}
+
+// ---- 供給モデル ----
+// 回ごとに固定の供給セットを、その回に踏んだ人だけへランダム配布:
+//   奇数回 = 扇2円2 / 偶数回 = 頭2扇1円1
+// 4回踏んだ人は受け取らない(マーク消滅) → そのぶん供給が余り、在庫(pool)に取りこぼしとして蓄積。
+// 各チームの「4回目」が偶数回(頭供給)に当たると頭が取りこぼされ、最後に頭が偏って残る(1234破綻)。
+function supplySet(roundNo){
+  return (roundNo % 2 === 1)
+    ? ['fan','fan','circle','circle']     // 奇数回: 扇2円2
+    : ['cross','cross','fan','circle'];   // 偶数回: 頭2扇1円1
+}
+// roundNo: その回が何回目の塔踏みか(state.step)。st=踏んだプレイヤー配列。
+function reassignSteppers(st, roundNo){
+  const bag = supplySet(roundNo);
+  for(let i=bag.length-1;i>0;i--){ const j=rand(i+1); [bag[i],bag[j]]=[bag[j],bag[i]]; } // shuffle
+  let bi=0;
+  for(const p of (st||[])){
+    p.steps = (p.steps||0) + 1;
+    if(p.steps >= 4){ p.hazard = null; continue; }       // 4回目は受け取らない→マーク消滅
+    p.hazard = (bi < bag.length) ? bag[bi++] : null;      // この回の供給から1つ
+  }
+  while(bi < bag.length){ state.pool[bag[bi]]++; bi++; }   // 余り供給は在庫へ取りこぼし
+}
+
+function bossNear4(){       // ボスに近い4人へ円(塔よりやや小さい)
+  const sorted = [...players].sort((a,b)=>dist(a,{x:CX,y:CY})-dist(b,{x:CX,y:CY}));
+  sorted.slice(0,4).forEach(p=> state.effects.push({type:'smallcircle', x:p.x, y:p.y}));
+}
+
+// ---- ステージ列(フラットな進行) ----
+// 予兆は「偶数回の塔処理の後」に表示し位置を記憶。
+// 半面は「次の奇数回の塔を踏んだ後(=塔エフェクトの1ステップ後)」に解決する。
+function buildSeq(){
+  const s=[{k:'start', r:1}];
+  for(let r=1;r<=8;r++){
+    s.push({k:'fire', r});                              // r回目の塔踏み(発動)。奇数回は塔エフェクトと同時に半面も発動
+    if(r%2===1){
+      if(r<8) s.push({k:'postOdd', r});                 // 供給(奇)+回転+次(偶)の塔
+    } else {
+      s.push({k:'omen', r});                            // 偶数fireの後: 頭が変化＋予兆出現(まだ記憶しない)
+      s.push({k:'memo', r});                            // 予兆を見て移動→次へ＝その位置を記憶＋次(奇)の塔
+      if(r===8) s.push({k:'final', r});                 // 最後は記憶位置で半面を解決して終了
+    }
+  }
+  return s;
+}
+
+// 記憶した位置の重心方向から危険半面を算出: 未来=いる方が危険 / 過去=いない方(反対)が危険
+function computeHalfFromMemory(omen){
+  if(!state.memory || !state.memory.length) return null;
+  let mx=0,my=0;
+  for(const m of state.memory){ mx+=m.x-CX; my+=m.y-CY; }
+  const occupied = Math.atan2(my, mx);
+  return { angle: (omen==='未来') ? occupied : occupied+Math.PI, omen };
+}
+
+function runStage(st){
+  if(st.k==='start'){
+    assignHazards(); players.forEach(p=>p.steps=0);
+    state.pool={cross:0,fan:0,circle:0}; state.angle=Math.PI/2; state.step=0;
+    state.omen=null; state.memory=null; state.halfDanger=null; state.effects=[];
+    state.showTowers=true; computeTowers();
+    state.phaseFire=false; state.phaseStep=true;
+  }
+  else if(st.k==='fire'){
+    state.step = st.r;
+    const sp = fireStepEffects();
+    if(st.r % 2 === 0) bossNear4();        // 偶数回はボス近4人へ円
+    // 奇数回: 塔に入った人のエフェクトと「同時」に半面攻撃が発動
+    if(st.r % 2 === 1 && state.omen) state.halfDanger = computeHalfFromMemory(state.omen);
+    state._lastSteppers = sp;
+    state.phaseFire=true; state.phaseStep=true;
+  }
+  else if(st.k==='postOdd'){
+    reassignSteppers(state._lastSteppers, st.r);  // 奇数回供給(扇2円2)
+    state.effects=[]; state.omen=null; state.halfDanger=null; state.memory=null;
+    state.angle += state.rotDir * Math.PI/4;       // 45°回転
+    computeTowers(); state.showTowers=true;
+    state.phaseFire=false; state.phaseStep=true;   // 次(偶数)の配置
+  }
+  else if(st.k==='omen'){
+    reassignSteppers(state._lastSteppers, st.r);  // 偶数回供給(頭2扇1円1)で頭が変化
+    state.effects=[]; state.halfDanger=null; state.memory=null;
+    state.omen = Math.random()<0.5 ? '過去' : '未来';   // 予兆出現(まだ記憶しない)
+    if(st.r<8){ computeTowers(); state.showTowers=true; } // この時点で次(奇数)の塔を表示
+    else state.showTowers=false;
+    state.phaseFire=false; state.phaseStep=false;
+  }
+  else if(st.k==='memo'){
+    state.memory = players.map(p=>({x:p.x,y:p.y,id:p.id}));  // 「次へを押した位置」を記憶
+    state.effects=[];
+    if(st.r<8){ computeTowers(); state.showTowers=true; }    // 次(奇数)の塔を表示(配置)
+    else state.showTowers=false;
+    state.phaseFire=false; state.phaseStep=(st.r<8);
+  }
+  else if(st.k==='final'){
+    state.effects=[]; state.showTowers=false;
+    state.halfDanger = computeHalfFromMemory(state.omen);  // 最後の半面を解決
+    state.phaseFire=false; state.phaseStep=false; state.done=true;
+  }
+}
+
+// ---- 進行制御 ----
+function advance(){
+  if(state.done) return;
+  state.idx++;
+  if(state.idx===0) state.seq = buildSeq();
+  const st = state.seq[state.idx];
+  if(!st) return;
+  runStage(st);
+  updateUI();
+}
+
+function resetAll(){
+  state.idx=-1; state.seq=[]; state.step=0; state.done=false;
+  state.angle=Math.PI/2; state.towers=[]; state.showTowers=false;
+  state.effects=[]; state.omen=null; state.memory=null; state.halfDanger=null;
+  state.pool={cross:0,fan:0,circle:0}; state._lastSteppers=[];
+  state.phaseFire=false; state.phaseStep=false; selected.clear();
+  initPositions();
+  updateUI();
+}
+
+// ---- UI更新 ----
+const nextBtn = document.getElementById('nextBtn');
+const resetBtn = document.getElementById('resetBtn');
+const mLoop = document.getElementById('mLoop'), mStep = document.getElementById('mStep'), mPhase = document.getElementById('mPhase');
+const statusEl = document.getElementById('status');
+
+function safeSideText(){
+  if(!state.omen) return '';
+  return state.omen==='未来' ? '記憶位置の<b>反対側</b>が安置' : '<b>記憶位置側</b>が安置';
+}
+function stageInfo(st){
+  switch(st.k){
+    case 'start': return ['配布','8人に頭割り(十字)/扇/円を配布。塔(2人×2)へ配置して「次へ」。空白ドラッグで範囲選択→まとめて移動も可。'];
+    case 'fire':
+      if(st.r % 2 === 1){
+        const half = state.halfDanger ? ` 同時に赤い<b>半面</b>発動(${state.omen})—<b>${safeSideText()}</b>。記憶位置(ゴースト)と照らして退避できているか確認。` : '';
+        return [`塔踏み${st.r}回目(奇数)`, `起爆！扇=最寄りへ/円=散開/頭割り=3人で受ける。${half}`];
+      }
+      return [`塔踏み${st.r}回目(偶数)`, '起爆＋ボス近4人へ円。この後に予兆が出ます。'];
+    case 'postOdd': return ['供給＆回転', `奇数回供給(扇2円2)を踏んだ人へ配布。塔が45°回転。次(${st.r+1}回目/偶数)の塔へ配置して「次へ」。`];
+    case 'omen': return [`予兆[${state.omen}]`, `偶数回処理の後：踏んだ人の頭が変化＋予兆が出現。${safeSideText()}。予兆に応じて<b>立ち位置を移動</b>し「次へ」を押すと、その位置が記憶されます。`];
+    case 'memo': return st.r<8
+      ? ['位置を記憶', `立ち位置を<b>記憶</b>しました(ゴースト表示)。${safeSideText()}。次に<b>塔の中へ</b>アイコンを移動して「次へ」＝奇数回処理＋記憶位置基準の半面が同時に来ます。`]
+      : ['位置を記憶', `最後の立ち位置を<b>記憶</b>しました。${safeSideText()}。「次へ」で記憶位置基準の半面が解決し終了します。`];
+    case 'final': return ['終了','最後の半面を解決しました。全行程終了。「リセット」で再挑戦。'];
+  }
+  return ['',''];
+}
+
+const poolCrossEl=document.getElementById('poolCross'), poolFanEl=document.getElementById('poolFan'), poolCircleEl=document.getElementById('poolCircle');
+function updateUI(){
+  mLoop.textContent = `${Math.min(4, Math.max(1, Math.ceil(state.step/2)||1))} / 4`;
+  mStep.textContent = `${state.step} / 8`;
+  poolCrossEl.textContent = state.pool.cross;
+  poolFanEl.textContent = state.pool.fan;
+  poolCircleEl.textContent = state.pool.circle;
+
+  if(state.idx < 0){
+    mPhase.textContent='待機';
+    nextBtn.textContent='▶ 開始'; nextBtn.disabled=false;
+    statusEl.innerHTML='<span class="tag">待機</span>「▶ 開始」でミッシング開始。8人に頭割り(十字)/扇/円が配られます。';
+    return;
+  }
+  const st = state.seq[state.idx];
+  const info = stageInfo(st);
+  mPhase.textContent = state.done ? '完了' : info[0];
+  statusEl.innerHTML = `<span class="tag">${info[0]}</span>${info[1]}`;
+  if(state.done){ nextBtn.textContent='✓ 全行程終了'; nextBtn.disabled=true; }
+  else { nextBtn.textContent='次へ ▶'; nextBtn.disabled=false; }
+}
+
+nextBtn.addEventListener('click', advance);
+resetBtn.addEventListener('click', resetAll);
+document.querySelectorAll('input[name=rot]').forEach(r=>{
+  r.addEventListener('change', e=>{ state.rotDir = parseInt(e.target.value,10); });
+});
+
+// ---- ドラッグ & 範囲選択 ----
+let mode=null;            // 'drag' | 'marquee'
+let dragStart=null;       // ドラッグ開始点
+let dragInit=[];          // [{p,x,y}] グループ移動の初期位置
+let didMove=false;        // クリック判定用
+const selected = new Set();
+let marquee=null;         // {x0,y0,x1,y1}
+
+function evPos(e){
+  const r = cv.getBoundingClientRect();
+  const cl = e.touches ? e.touches[0] : e;
+  return { x:(cl.clientX-r.left)*(W/r.width), y:(cl.clientY-r.top)*(H/r.height) };
+}
+function pickPlayer(pt){
+  for(let i=players.length-1;i>=0;i--){
+    const p=players[i];
+    if(dist(pt,p) <= PDOT_R+10) return p;   // ドットは小さいので掴み判定を広めに
+  }
+  return null;
+}
+function clampToArena(p,nx,ny){
+  const dx=nx-CX, dy=ny-CY, dd=Math.hypot(dx,dy), lim=ARENA_R-PDOT_R;
+  if(dd>lim){ nx=CX+dx/dd*lim; ny=CY+dy/dd*lim; }
+  p.x=nx; p.y=ny;
+}
+function liveRecalc(){
+  if(!state.phaseFire) return;          // 塔踏み発動中のみエフェクト追従
+  state.effects=[]; const st=steppers();
+  for(const p of st) pushHazardEffect(p);
+  if(state.step % 2 === 0) bossNear4(); // 偶数回はボス近4人へ円
+  state._lastSteppers = st;             // 踏み手を常に最新化(頭の切替が正しく対象を取る)
+}
+function normRect(m){
+  return { x:Math.min(m.x0,m.x1), y:Math.min(m.y0,m.y1),
+           w:Math.abs(m.x1-m.x0), h:Math.abs(m.y1-m.y0) };
+}
+
+function onDown(e){
+  const pt=evPos(e); const p=pickPlayer(pt); didMove=false;
+  if(p){
+    // 掴んだドットが未選択なら単体選択に切替。選択済みならグループごと動かす
+    if(!selected.has(p)){ selected.clear(); selected.add(p); }
+    mode='drag'; dragStart=pt;
+    dragInit=[...selected].map(q=>({p:q,x:q.x,y:q.y}));
+    cv.style.cursor='grabbing';
+  }else{
+    mode='marquee'; marquee={x0:pt.x,y0:pt.y,x1:pt.x,y1:pt.y};
+    selected.clear();
+  }
+  e.preventDefault();
+}
+function onMove(e){
+  if(!mode) return;
+  const pt=evPos(e); didMove=true;
+  if(mode==='drag'){
+    const dx=pt.x-dragStart.x, dy=pt.y-dragStart.y;
+    for(const it of dragInit) clampToArena(it.p, it.x+dx, it.y+dy);
+    liveRecalc();
+  }else if(mode==='marquee'){
+    marquee.x1=pt.x; marquee.y1=pt.y;
+    const r=normRect(marquee); selected.clear();
+    for(const q of players){
+      if(q.x>=r.x && q.x<=r.x+r.w && q.y>=r.y && q.y<=r.y+r.h) selected.add(q);
+    }
+  }
+  e.preventDefault();
+}
+function onUp(){
+  // 何も動かさず空クリック→選択解除
+  if(mode==='marquee' && !didMove) selected.clear();
+  mode=null; marquee=null; cv.style.cursor='grab';
+}
+cv.addEventListener('mousedown',onDown); window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp);
+cv.addEventListener('touchstart',onDown,{passive:false}); cv.addEventListener('touchmove',onMove,{passive:false}); cv.addEventListener('touchend',onUp);
+function pushHazardEffect(p){
+  if(p.hazard==='cross') state.effects.push({type:'stack',x:p.x,y:p.y});
+  else if(p.hazard==='circle') state.effects.push({type:'circle',x:p.x,y:p.y});
+  else if(p.hazard==='fan'){
+    const t=nearestOther(p); const a=t?Math.atan2(t.y-p.y,t.x-p.x):-Math.PI/2;
+    state.effects.push({type:'fan',x:p.x,y:p.y,a});
+  }
+}
+
+// ---- 描画 ----
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // アリーナ枠
+  ctx.beginPath(); ctx.arc(CX,CY,ARENA_R,0,Math.PI*2);
+  ctx.strokeStyle='#2c3a4a'; ctx.lineWidth=2; ctx.stroke();
+  // 方位ガイド(十字)
+  ctx.strokeStyle='rgba(120,140,160,.12)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(CX-ARENA_R,CY); ctx.lineTo(CX+ARENA_R,CY);
+  ctx.moveTo(CX,CY-ARENA_R); ctx.lineTo(CX,CY+ARENA_R); ctx.stroke();
+
+  // ボスのターゲットサークル(中央の破線円)
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,TARGET_R,0,Math.PI*2);
+  ctx.strokeStyle='rgba(210,220,235,.35)'; ctx.lineWidth=1.5; ctx.setLineDash([7,7]);
+  ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+
+  // 半面危険(終焉)
+  if(state.halfDanger){
+    const a=state.halfDanger.angle;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX,CY,ARENA_R,a-Math.PI/2,a+Math.PI/2);
+    ctx.lineTo(CX,CY); ctx.closePath();
+    ctx.fillStyle='rgba(216,58,58,.30)'; ctx.fill();
+    ctx.strokeStyle='rgba(255,90,90,.7)'; ctx.lineWidth=2; ctx.stroke();
+    ctx.restore();
+  }
+
+  // 記憶位置(ゴースト)
+  if(state.memory){
+    for(const m of state.memory){
+      ctx.strokeStyle='rgba(180,200,220,.4)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(m.x, m.y, PDOT_R+2, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // 塔
+  if(state.showTowers){
+    for(const t of state.towers){
+      ctx.beginPath(); ctx.arc(t.x,t.y,TOWER_R,0,Math.PI*2);
+      ctx.fillStyle='rgba(38,198,218,.18)';
+      ctx.strokeStyle='#26c6da'; ctx.lineWidth=3; ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(t.x,t.y,TOWER_R*0.55,0,Math.PI*2);
+      ctx.strokeStyle='rgba(38,198,218,.55)'; ctx.lineWidth=2; ctx.stroke();
+    }
+  }
+
+  // 床エフェクト
+  for(const e of state.effects) drawEffect(e);
+
+  // ボス
+  drawBoss(CX,CY);
+  // 予兆
+  if(state.omen) drawOmen(state.omen);
+
+  // プレイヤー
+  for(const p of players) drawPlayer(p);
+
+  // 範囲選択の矩形
+  if(marquee){
+    const r=normRect(marquee);
+    ctx.save();
+    ctx.fillStyle='rgba(120,180,255,.10)';
+    ctx.strokeStyle='rgba(140,190,255,.8)'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeRect(r.x,r.y,r.w,r.h);
+    ctx.setLineDash([]); ctx.restore();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+function drawEffect(e){
+  ctx.save();
+  if(e.type==='circle'){            // 散開円AoE(ピンク)
+    ctx.beginPath(); ctx.arc(e.x,e.y,FX_CIRCLE,0,Math.PI*2);
+    ctx.fillStyle='rgba(236,86,160,.20)'; ctx.fill();
+    ctx.strokeStyle='rgba(240,110,180,.95)'; ctx.lineWidth=2; ctx.setLineDash([8,6]); ctx.stroke();
+    ctx.setLineDash([]);
+  }else if(e.type==='stack'){       // 頭割り(黄)
+    ctx.beginPath(); ctx.arc(e.x,e.y,FX_STACK,0,Math.PI*2);
+    ctx.fillStyle='rgba(244,196,60,.18)'; ctx.fill();
+    ctx.strokeStyle='rgba(244,196,60,.95)'; ctx.lineWidth=2; ctx.setLineDash([8,6]); ctx.stroke();
+    ctx.setLineDash([]);
+  }else if(e.type==='fan'){         // 扇AoE(紫): 射程無限→アリーナ端まで広がる
+    const half=(FX_FAN_DEG*Math.PI/180)/2, len=ARENA_R*2.2;
+    // アリーナ円でクリップして端で切る
+    ctx.beginPath(); ctx.arc(CX,CY,ARENA_R,0,Math.PI*2); ctx.clip();
+    ctx.beginPath(); ctx.moveTo(e.x,e.y);
+    ctx.arc(e.x,e.y,len,e.a-half,e.a+half); ctx.closePath();
+    ctx.fillStyle='rgba(150,90,240,.24)'; ctx.fill();
+    ctx.strokeStyle='rgba(170,120,250,.95)'; ctx.lineWidth=2; ctx.setLineDash([8,6]); ctx.stroke();
+    ctx.setLineDash([]);
+  }else if(e.type==='smallcircle'){ // ボス近4人小円
+    ctx.beginPath(); ctx.arc(e.x,e.y,FX_SMALL,0,Math.PI*2);
+    ctx.fillStyle='rgba(244,208,63,.14)'; ctx.fill();
+    ctx.strokeStyle='rgba(244,208,63,.6)'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBoss(x,y){
+  const r=26;
+  ctx.save(); ctx.translate(x,y);
+  // 赤の正三角形
+  ctx.beginPath();
+  for(let i=0;i<3;i++){ const a=-Math.PI/2+i*2*Math.PI/3; const px=Math.cos(a)*r,py=Math.sin(a)*r; i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+  ctx.closePath(); ctx.fillStyle='#d83a3a'; ctx.fill();
+  // 黄の逆正三角形
+  ctx.beginPath();
+  for(let i=0;i<3;i++){ const a=Math.PI/2+i*2*Math.PI/3; const px=Math.cos(a)*r,py=Math.sin(a)*r; i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+  ctx.closePath(); ctx.fillStyle='rgba(244,208,63,.85)'; ctx.fill();
+  ctx.restore();
+}
+
+function drawOmen(t){
+  const x=CX, y=CY-58, w=66, h=26;
+  ctx.save();
+  ctx.fillStyle='rgba(244,224,140,.92)';
+  ctx.strokeStyle='#7a6a20'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.roundRect(x-w/2,y-h/2,w,h,5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#1a1407'; ctx.font='bold 18px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(t,x,y+1);
+  ctx.restore();
+}
+
+function drawPlayer(p){
+  ctx.save();
+  // 塔を踏んでいる人(=エフェクト発生源・頭が切り替わる対象)を明示
+  if(state.phaseStep && inTower(p)){
+    ctx.beginPath(); ctx.arc(p.x, p.y, PDOT_R+9, 0, Math.PI*2);
+    ctx.strokeStyle='rgba(255,235,130,.95)'; ctx.lineWidth=2.5; ctx.setLineDash([4,3]);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // 選択中ハイライト
+  if(selected.has(p)){
+    ctx.beginPath(); ctx.arc(p.x, p.y, PDOT_R+5, 0, Math.PI*2);
+    ctx.strokeStyle='rgba(140,200,255,.95)'; ctx.lineWidth=2.5; ctx.stroke();
+  }
+  // ドット本体(小さめ)
+  ctx.beginPath(); ctx.arc(p.x, p.y, PDOT_R, 0, Math.PI*2);
+  ctx.fillStyle=p.color;
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2;
+  ctx.fill(); ctx.stroke();
+  // 4回踏み終えた人は塗りつぶしの小マーク(済)
+  if(p.steps>=4){
+    ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='bold 10px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✓', p.x, p.y);
+  }
+  // ラベル + 踏んだ回数(右下に小さく)
+  const label = p.id + (p.steps>0 ? ` (${p.steps})` : '');
+  ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.lineWidth=3; ctx.strokeStyle='rgba(8,12,18,.85)';
+  ctx.strokeText(label, p.x+PDOT_R+3, p.y+PDOT_R+5);
+  ctx.fillStyle='#fff';
+  ctx.fillText(label, p.x+PDOT_R+3, p.y+PDOT_R+5);
+  // 頭上ハザード
+  if(p.hazard) drawHazardIcon(p.x, p.y-PDOT_R-11, p.hazard);
+  ctx.restore();
+}
+
+// ハザード色: 頭割り(cross)=黄 / 円(circle)=ピンク / 扇(fan)=紫
+const HAZ_COLOR = {cross:'#f4c43c', circle:'#ec56a0', fan:'#9a5af0'};
+function drawHazardIcon(x,y,type){
+  ctx.save();
+  ctx.strokeStyle=HAZ_COLOR[type]; ctx.fillStyle=HAZ_COLOR[type]; ctx.lineWidth=2.5;
+  if(type==='cross'){
+    ctx.beginPath(); ctx.moveTo(x-7,y); ctx.lineTo(x+7,y);
+    ctx.moveTo(x,y-7); ctx.lineTo(x,y+7); ctx.stroke();
+  }else if(type==='circle'){
+    ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2); ctx.stroke();
+  }else if(type==='fan'){
+    // 視認性のため大きく・広角に
+    const half=(HEAD_FAN_DEG*Math.PI/180)/2, a=-Math.PI/2; // 上向き
+    ctx.beginPath(); ctx.moveTo(x,y+2);
+    ctx.arc(x,y+2,18,a-half,a+half); ctx.closePath();
+    ctx.globalAlpha=0.95; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle='rgba(20,10,40,.5)'; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// roundRect ポリフィル(古環境用)
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+    this.beginPath(); this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r);
+    this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); return this;
+  };
+}
+
+// ---- 起動 ----
+initPositions();
+updateUI();
+draw();
+</script>
+</body>
+</html>
